@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Typing Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+
+        .status {
+            text-align: center;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            font-weight: 500;
+        }
+
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.connecting {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .text-display {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            min-height: 120px;
+            font-size: 1.3em;
+            line-height: 1.8;
+            color: #333;
+            border: 2px solid #e9ecef;
+        }
+
+        .text-display.empty {
+            color: #999;
+            font-style: italic;
+        }
+
+        .input-section {
+            margin-bottom: 20px;
+        }
+
+        .input-section label {
+            display: block;
+            margin-bottom: 10px;
+            color: #555;
+            font-weight: 600;
+        }
+
+        #userInput {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.1em;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+
+        #userInput:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        #userInput:disabled {
+            background: #e9ecef;
+            cursor: not-allowed;
+        }
+
+        .char {
+            display: inline;
+        }
+
+        .char.correct {
+            color: #28a745;
+        }
+
+        .char.incorrect {
+            color: #dc3545;
+            background: #ffe6e6;
+        }
+
+        .char.pending {
+            color: #333;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .reconnect-btn {
+            display: block;
+            margin: 20px auto 0;
+            padding: 12px 30px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .reconnect-btn:hover {
+            background: #5568d3;
+        }
+
+        .reconnect-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⌨️ Typing Test</h1>
+        
+        <div id="status" class="status connecting">Connecting to server...</div>
+
+        <div id="textDisplay" class="text-display empty">
+            Waiting for text from server...
+        </div>
+
+        <div class="input-section">
+            <label for="userInput">Your typing:</label>
+            <input 
+                type="text" 
+                id="userInput" 
+                placeholder="Start typing when text appears above..." 
+                disabled
+                autocomplete="off"
+                spellcheck="false"
+            >
+        </div>
+
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-label">Accuracy</div>
+                <div class="stat-value" id="accuracy">0%</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Characters</div>
+                <div class="stat-value" id="progress">0/0</div>
+            </div>
+        </div>
+
+        <button id="reconnectBtn" class="reconnect-btn" style="display: none;">Reconnect</button>
+    </div>
+
+    <script>
+        let ws;
+        let targetText = '';
+        const statusEl = document.getElementById('status');
+        const textDisplayEl = document.getElementById('textDisplay');
+        const userInputEl = document.getElementById('userInput');
+        const accuracyEl = document.getElementById('accuracy');
+        const progressEl = document.getElementById('progress');
+        const reconnectBtn = document.getElementById('reconnectBtn');
+
+        function connect() {
+            statusEl.className = 'status connecting';
+            statusEl.textContent = 'Connecting to server...';
+            reconnectBtn.style.display = 'none';
+
+            ws = new WebSocket('ws://localhost:8080/ws');
+
+            ws.onopen = () => {
+                statusEl.className = 'status connected';
+                statusEl.textContent = '✓ Connected to server';
+                userInputEl.disabled = false;
+                userInputEl.focus();
+            };
+
+            ws.onmessage = (event) => {
+                targetText = event.data;
+                textDisplayEl.className = 'text-display';
+                renderText('');
+                userInputEl.value = '';
+                updateStats('');
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+
+            ws.onclose = () => {
+                statusEl.className = 'status disconnected';
+                statusEl.textContent = '✗ Disconnected from server';
+                userInputEl.disabled = true;
+                reconnectBtn.style.display = 'block';
+            };
+        }
+
+        function renderText(userText) {
+            if (!targetText) {
+                textDisplayEl.className = 'text-display empty';
+                textDisplayEl.textContent = 'Waiting for text from server...';
+                return;
+            }
+
+            let html = '';
+            for (let i = 0; i < targetText.length; i++) {
+                const targetChar = targetText[i];
+                const userChar = userText[i];
+                
+                let className = 'char pending';
+                if (userChar !== undefined) {
+                    className = userChar === targetChar ? 'char correct' : 'char incorrect';
+                }
+                
+                html += `<span class="${className}">${targetChar === ' ' ? '&nbsp;' : targetChar}</span>`;
+            }
+            
+            textDisplayEl.innerHTML = html;
+        }
+
+        function updateStats(userText) {
+            if (!targetText) {
+                accuracyEl.textContent = '0%';
+                progressEl.textContent = '0/0';
+                return;
+            }
+
+            let correct = 0;
+            for (let i = 0; i < userText.length; i++) {
+                if (userText[i] === targetText[i]) {
+                    correct++;
+                }
+            }
+
+            const accuracy = userText.length > 0 ? Math.round((correct / userText.length) * 100) : 0;
+            accuracyEl.textContent = accuracy + '%';
+            progressEl.textContent = `${userText.length}/${targetText.length}`;
+        }
+
+        userInputEl.addEventListener('input', (e) => {
+            const userText = e.target.value;
+            renderText(userText);
+            updateStats(userText);
+
+            // Send the current typed text to the server
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(userText);
+            }
+
+            // Check if completed
+            if (userText.length === targetText.length) {
+                let allCorrect = true;
+                for (let i = 0; i < targetText.length; i++) {
+                    if (userText[i] !== targetText[i]) {
+                        allCorrect = false;
+                        break;
+                    }
+                }
+                
+                if (allCorrect) {
+                    setTimeout(() => {
+                        alert('Great job! You completed the text perfectly! 🎉');
+                    }, 100);
+                }
+            }
+        });
+
+        reconnectBtn.addEventListener('click', () => {
+            connect();
+        });
+
+        // Initial connection
+        connect();
+    </script>
+</body>
+</html>

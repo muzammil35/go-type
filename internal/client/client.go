@@ -35,7 +35,7 @@ func NewClient(name string, id string, conn *websocket.Conn) *Client {
 	return &Client{
 		name: name,
 		Id:   GenerateUserID(),
-		conn: conn,
+		Conn: conn,
 		wpm:0,
 		State: StateWaiting,
 	}

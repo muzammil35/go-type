@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"sync"
 	"github.com/gorilla/websocket"
-	cl "go-type/client" 
+	cl "go-type/internal/client" 
     "time"
     "encoding/json"
     "fmt"
@@ -26,13 +26,13 @@ var upgrader = websocket.Upgrader{
 }
 
 type Server struct {
-	clients map[string] *cl.Client
-	broadcast chan []byte
+	Clients map[string] *cl.Client
+	Broadcast chan []byte
     mu        sync.Mutex
-    matchmakingChan chan MatchmakingAction
+    MatchmakingChan chan MatchmakingAction
 }
 
-func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
+func (s *Server) HandleConnect(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
     if err != nil {
         log.Printf("Failed to upgrade connection: %v", err)
@@ -45,22 +45,24 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	c := cl.NewClient(name, cl.GenerateUserID(), conn)
 	
 	// Send add action to matchmaking channel
-	s.matchmakingChan <- MatchmakingAction{Action: "add", ID: c.Id, Client: c}
+    log.Printf("adding client to matchmaking: %s", c.Id)
+	s.MatchmakingChan <- MatchmakingAction{Action: "add", ID: c.Id, Client: c}
+    
+    err = conn.WriteMessage(websocket.TextMessage, []byte("Waiting..."))
+    if err != nil {
+        log.Printf("write error: %v", err)
+        return
+    }
 
     for {
-        _, message, err := conn.ReadMessage()
+        _, msg, err := conn.ReadMessage()
         if err != nil {
-            // Client disconnected or error occurred
-            s.matchmakingChan <- MatchmakingAction{Action: "remove", ID: c.Id}
+            log.Println("read error:", err)
             break
         }
-        for _, value := range s.clients {
-            //if there is a client with an opponent, in a running game:
-                //broadcast WPM to opponents
-            //else:
-                //return message to frontend that says "waiting for players"
-        }
+        log.Printf("recv: %s\n", msg)
     }
+    
     
     
 }
@@ -90,6 +92,7 @@ func MatchmakingManager(actions <-chan MatchmakingAction) {
             }
         case <-ticker.C:
             // Your original matchmaking logic
+            //log.Printf("doing matchmaking with clients now...")
             Matchmaking(&clients)
         }
     }
@@ -119,6 +122,8 @@ func Matchmaking(clients *map[string]*cl.Client) {
         player_1.State = cl.StatePlaying
         player_2.State = cl.StatePlaying
 
+        log.Printf("starting game")
+
         go StartGame(player_1, player_2, "game_text.txt")
 
         // Remove from matchmaking queue
@@ -140,11 +145,15 @@ type GameSession struct {
 }
 
 func StartGame(player1, player2 *cl.Client, textFilePath string) error {
+
+
     // Read the text from file
     content, err := os.ReadFile(textFilePath)
     if err != nil {
         return fmt.Errorf("failed to read text file: %v", err)
     }
+
+    log.Printf("read in the gametext")
     
     gameText := strings.TrimSpace(string(content))
     
