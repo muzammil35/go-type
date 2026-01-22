@@ -48,12 +48,18 @@ func (s *Server) HandleConnect(w http.ResponseWriter, r *http.Request) {
     log.Printf("adding client to matchmaking: %s", c.Id)
 	s.MatchmakingChan <- MatchmakingAction{Action: "add", ID: c.Id, Client: c}
     
-    err = conn.WriteMessage(websocket.TextMessage, []byte("Waiting..."))
+    message := map[string]interface{}{
+        "type":        "wait_message",
+        "data": "waiting for opponent",
+    }
+    
+    messageJSON, err := json.Marshal(message)
     if err != nil {
-        log.Printf("write error: %v", err)
+        log.Println("error marshalling json: ", err)
         return
     }
-
+    conn.WriteMessage(websocket.TextMessage, messageJSON)
+    
     for {
         _, msg, err := conn.ReadMessage()
         if err != nil {
@@ -62,9 +68,8 @@ func (s *Server) HandleConnect(w http.ResponseWriter, r *http.Request) {
         }
         log.Printf("recv: %s\n", msg)
     }
-    
-    
-    
+    return
+
 }
 
 
@@ -165,7 +170,7 @@ func StartGame(player1, player2 *cl.Client, textFilePath string) error {
     }
     
     // Send game start message with future start time
-    startTime := time.Now().Add(3 * time.Second).Unix()
+    startTime := time.Now().Add(2 * time.Second).Unix()
     message := map[string]interface{}{
         "type":        "game_start",
         "text":        gameText,
