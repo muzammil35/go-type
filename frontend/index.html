@@ -69,7 +69,6 @@
             font-size: 1.3em;
             line-height: 1.8;
             border: 2px solid #e9ecef;
-            cursor: text;
             position: relative;
         }
 
@@ -181,7 +180,6 @@
         
         <div id="status" class="status connecting">Connecting to server...</div>
 
-        <div class="instructions">Click on the text below and start typing!</div>
 
         <div id="textDisplay" class="text-display empty" tabindex="0">
             Waiting for text from server...
@@ -259,6 +257,7 @@
                         renderText();
                         updateStats();
                         textDisplayEl.focus();
+                        statusEl.textContent = 'Game Started, start typing!'
                         break;
                 }
             };
